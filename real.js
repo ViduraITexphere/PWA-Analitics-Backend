@@ -1,13 +1,13 @@
 const express = require("express");
-const cors = require("cors");
+const http = require("http");
+const socketIo = require("socket.io");
 const { BetaAnalyticsDataClient } = require("@google-analytics/data");
 
-propertyId = "433536615";
-
 const app = express();
-const port = 3001;
+const server = http.createServer(app);
+const io = socketIo(server);
 
-app.use(cors());
+const port = 3001;
 
 // Replace the placeholders with your actual service account credentials
 const serviceAccountCredentials = {
@@ -22,11 +22,7 @@ const analyticsDataClient = new BetaAnalyticsDataClient({
   credentials: serviceAccountCredentials,
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
-
-//////////////////////////////////////////////////// Route to fetch analytics data ////////////////////////////////////////////////////////////////
+// Your existing code to run the report
 app.get("/analytics-data", async (req, res) => {
   try {
     const [response] = await analyticsDataClient.runReport({
@@ -73,60 +69,32 @@ app.get("/analytics-data", async (req, res) => {
   }
 });
 
-///////////////////////////////////////////////// Route to fetch real-time analytics data //////////////////////////////////////////////////////////
-
-async function runRealtimeReport() {
-  const [response] = await analyticsDataClient.runRealtimeReport({
-    property: `properties/${propertyId}`,
-    dimensions: [{ name: "country" }],
-    metrics: [{ name: "activeUsers" }],
-  });
-  printRunReportResponse(response);
-  return response;
-}
-
-// Initial call
-runRealtimeReport();
-
-// Set interval to update the report every 5 seconds (5000 milliseconds)
-setInterval(runRealtimeReport, 5000);
-
-function printRunReportResponse(response) {
-  console.log(`${response.rowCount} rows received`);
-  response.dimensionHeaders.forEach((dimensionHeader) => {
-    console.log(`Dimension header name: ${dimensionHeader.name}`);
-  });
-  response.metricHeaders.forEach((metricHeader) => {
-    console.log(
-      `Metric header name: ${metricHeader.name} (${metricHeader.type})`
-    );
-  });
-
-  console.log("Report result:");
-  response.rows.forEach((row) => {
-    console.log(
-      `${row.dimensionValues[0].value}, ${row.metricValues[0].value}`
-    );
-  });
-}
-
-app.get("/api/userCount", async (req, res) => {
-  try {
-    const response = await runRealtimeReport();
-    console.log("API /api/userCount called successfully.");
-    printRunReportResponse(response);
-    const userCount = getUserCountFromResponse(response);
-    console.log("User count:", userCount);
-    res.json({ userCount });
-  } catch (error) {
-    console.error("Error fetching user count:", error);
-    res.status(500).json({ error: "Error fetching user count" });
-  }
+server.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
-function getUserCountFromResponse(response) {
-  if (response && response.rows && response.rows.length > 0) {
-    return response.rows[0].metricValues[0].value;
-  }
-  return 0;
-}
-runRealtimeReport();
+
+let realTimeUserCount = 0; // Initialize user count
+
+io.on("connection", (socket) => {
+  console.log("A user connected");
+  realTimeUserCount++; // Increment user count on new connection
+  io.emit("userCount", realTimeUserCount); // Emit updated user count to all clients
+
+  socket.on("disconnect", () => {
+    console.log("A user disconnected");
+    realTimeUserCount--; // Decrement user count on disconnection
+    io.emit("userCount", realTimeUserCount); // Emit updated user count to all clients
+  });
+});
+
+app.get("/simulate-user-connection", (req, res) => {
+  realTimeUserCount++; // Simulate new user connection
+  io.emit("userCount", realTimeUserCount); // Emit updated user count to all clients
+  res.send("Simulated user connected.");
+});
+
+app.get("/simulate-user-disconnection", (req, res) => {
+  realTimeUserCount--; // Simulate user disconnection
+  io.emit("userCount", realTimeUserCount); // Emit updated user count to all clients
+  res.send("Simulated user disconnected.");
+});

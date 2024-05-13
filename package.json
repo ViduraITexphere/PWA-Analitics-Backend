@@ -15,6 +15,9 @@
     "country-flag-icons": "^1.5.11",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "googleapis": "^137.1.0"
+    "google-auth-library": "^9.9.0",
+    "googleapis": "^137.1.0",
+    "request": "^2.88.2",
+    "socket.io": "^4.7.5"
   }
 }
